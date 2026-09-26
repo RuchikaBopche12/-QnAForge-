@@ -1,0 +1,1 @@
+Artificial Intelligence is a branch of computer science that enables machines to perform tasks that normally require human intelligence. Machine learning is a subset of artificial intelligence that allows computers to learn patterns from data without being explicitly programmed.
