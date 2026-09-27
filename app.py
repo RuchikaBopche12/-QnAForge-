@@ -1,121 +1,756 @@
-import os, tempfile
+import html
+import tempfile
 from pathlib import Path
+
 import streamlit as st
-from dotenv import load_dotenv
+
 from document_processor import extract_text
 from qna_generator import generate_qna_multilingual
 from excel_writer import create_qna_workbook
 
-load_dotenv()
-st.set_page_config(page_title="LinguaQ AI", page_icon="🌐", layout="wide")
 
-st.markdown("""
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
+
+st.set_page_config(
+    page_title="QnAForge",
+    page_icon="🌐",
+    layout="wide",
+    initial_sidebar_state="auto",
+)
+
+
+# ============================================================
+# CUSTOM CSS
+# ============================================================
+
+st.markdown(
+    """
 <style>
-.block-container{padding-top:2rem}
-.hero{padding:1.7rem 2rem;border:1px solid rgba(128,128,128,.25);border-radius:22px;background:linear-gradient(135deg,rgba(99,102,241,.13),rgba(14,165,233,.08));margin-bottom:1.2rem}
-.hero h1{margin:0;font-size:2.35rem}.hero p{margin:.5rem 0 0;opacity:.8}
-.q-card{border:1px solid rgba(128,128,128,.22);border-radius:14px;padding:1rem;margin-bottom:.8rem}
-.q-label{font-size:.78rem;font-weight:700;opacity:.65}.q-text{font-size:1.02rem;font-weight:650;margin:.25rem 0 .55rem}.a-text{line-height:1.55;opacity:.9}
-</style>
-""", unsafe_allow_html=True)
 
-st.markdown('<div class="hero"><h1>🌐 LinguaQ AI</h1><p>Upload. Understand. Generate. Translate.</p></div>', unsafe_allow_html=True)
+:root {
+    --qf-blue: #2563eb;
+    --qf-purple: #7c3aed;
+    --qf-cyan: #0ea5e9;
+    --qf-border: rgba(128,128,128,0.20);
+    --qf-soft: rgba(128,128,128,0.07);
+}
+
+/* Main width */
+.block-container {
+    max-width: 1250px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    border-right: 1px solid var(--qf-border);
+}
+
+section[data-testid="stSidebar"] > div {
+    padding-top: 2rem;
+}
+
+/* Hero */
+.qf-hero {
+    padding: 2.4rem 2.5rem;
+    margin-bottom: 2rem;
+    border-radius: 26px;
+    border: 1px solid rgba(37,99,235,0.22);
+    background:
+        radial-gradient(
+            circle at 85% 20%,
+            rgba(124,58,237,0.22),
+            transparent 35%
+        ),
+        radial-gradient(
+            circle at 10% 90%,
+            rgba(37,99,235,0.18),
+            transparent 35%
+        ),
+        var(--secondary-background-color);
+    box-shadow: 0 15px 45px rgba(0,0,0,0.08);
+}
+
+.qf-hero-icon {
+    font-size: 2.7rem;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+}
+
+.qf-hero-title {
+    font-size: 2.7rem;
+    font-weight: 850;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
+}
+
+.qf-hero-title span {
+    background: linear-gradient(
+        90deg,
+        var(--qf-blue),
+        var(--qf-purple)
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.qf-hero-subtitle {
+    margin-top: 0.8rem;
+    font-size: 1.05rem;
+    opacity: 0.75;
+    max-width: 720px;
+}
+
+.qf-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 1.2rem;
+}
+
+.qf-badge {
+    display: inline-block;
+    padding: 0.42rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid var(--qf-border);
+    background: var(--qf-soft);
+    font-size: 0.82rem;
+}
+
+/* Section headings */
+.qf-section-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    margin-top: 0.4rem;
+}
+
+.qf-section-subtitle {
+    margin-top: 0.25rem;
+    margin-bottom: 1.2rem;
+    opacity: 0.68;
+}
+
+/* Upload card */
+.qf-upload-card {
+    padding: 1.4rem;
+    border-radius: 20px;
+    border: 1px solid var(--qf-border);
+    background: var(--secondary-background-color);
+    margin-bottom: 1.5rem;
+}
+
+/* Configuration */
+.qf-config {
+    padding: 1.1rem 1.25rem;
+    border-radius: 18px;
+    border: 1px solid var(--qf-border);
+    background: var(--qf-soft);
+    margin: 1rem 0 1.2rem 0;
+}
+
+/* Q&A card */
+.qf-qcard {
+    padding: 1.25rem 1.35rem;
+    margin: 0 0 1rem 0;
+    border-radius: 18px;
+    border: 1px solid var(--qf-border);
+    background: var(--secondary-background-color);
+    box-shadow: 0 5px 18px rgba(0,0,0,0.045);
+}
+
+.qf-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(
+        135deg,
+        var(--qf-blue),
+        var(--qf-purple)
+    );
+    color: white;
+    font-weight: 800;
+    margin-bottom: 0.8rem;
+}
+
+.qf-label {
+    font-size: 0.76rem;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.55;
+    margin-top: 0.55rem;
+}
+
+.qf-question {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.55;
+    margin-top: 0.25rem;
+}
+
+.qf-answer {
+    font-size: 0.94rem;
+    line-height: 1.65;
+    opacity: 0.88;
+    margin-top: 0.25rem;
+}
+
+/* Footer */
+.qf-footer {
+    text-align: center;
+    opacity: 0.55;
+    padding: 2rem 0 1rem 0;
+    font-size: 0.82rem;
+}
+
+/* Buttons */
+.stButton > button {
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+
+    .block-container {
+        padding-left: 0.9rem;
+        padding-right: 0.9rem;
+        padding-top: 1rem;
+    }
+
+    .qf-hero {
+        padding: 1.5rem 1.15rem;
+        border-radius: 20px;
+    }
+
+    .qf-hero-icon {
+        font-size: 2.2rem;
+    }
+
+    .qf-hero-title {
+        font-size: 2rem;
+    }
+
+    .qf-hero-subtitle {
+        font-size: 0.9rem;
+    }
+
+    .qf-badge {
+        font-size: 0.72rem;
+        padding: 0.32rem 0.62rem;
+    }
+
+    .qf-section-title {
+        font-size: 1.2rem;
+    }
+
+    .qf-qcard {
+        padding: 1rem;
+        border-radius: 15px;
+    }
+
+    .qf-question {
+        font-size: 0.94rem;
+    }
+
+    .qf-answer {
+        font-size: 0.88rem;
+    }
+}
+
+@media (max-width: 430px) {
+
+    .qf-hero {
+        padding: 1.15rem 0.95rem;
+    }
+
+    .qf-hero-title {
+        font-size: 1.7rem;
+    }
+
+    .qf-qcard {
+        padding: 0.85rem;
+    }
+}
+
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# API KEY
+# ============================================================
+
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+
+except Exception:
+    st.error("⚠️ Gemini API key is not configured.")
+    st.info(
+        "Add GEMINI_API_KEY to .streamlit/secrets.toml "
+        "for local use."
+    )
+    st.stop()
+
+
+# ============================================================
+# HERO
+# ============================================================
+
+st.html(
+    """
+<div class="qf-hero">
+    <div class="qf-hero-icon">🌐</div>
+    <div class="qf-hero-title">
+        <span>QnAForge</span>
+    </div>
+    <div class="qf-hero-subtitle">
+        AI-powered multilingual Question-Answer generation
+        from your documents.
+    </div>
+    <div class="qf-badges">
+        <span class="qf-badge">✨ AI Powered</span>
+        <span class="qf-badge">🇬🇧 English</span>
+        <span class="qf-badge">🇮🇳 Hindi</span>
+        <span class="qf-badge">🇮🇳 Marathi</span>
+    </div>
+</div>
+"""
+)
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
 
 with st.sidebar:
+
     st.header("⚙️ Generation Settings")
-    api_key = st.text_input("Gemini API Key", value=os.getenv("GEMINI_API_KEY",""), type="password")
-    model = st.selectbox("AI Model", ["gemini-3.5-flash-lite","gemini-3.5-flash"])
-    qna_count = st.slider("Q&A pairs", 5, 20, 5, step=5)
-    difficulty = st.selectbox("Difficulty", ["Mixed","Easy","Medium","Advanced"])
-    question_type = st.selectbox("Question type", ["Mixed","Conceptual","Definition","Short Answer"])
+    st.caption("Customize your Q&A generation.")
+
+    model = st.selectbox(
+        "AI Model",
+        [
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+        ],
+        index=0,
+    )
+
+    qna_count = st.slider(
+        "Q&A pairs",
+        min_value=5,
+        max_value=20,
+        value=5,
+        step=5,
+    )
+
+    difficulty = st.selectbox(
+        "Difficulty",
+        [
+            "Mixed",
+            "Easy",
+            "Medium",
+            "Advanced",
+        ],
+    )
+
+    question_type = st.selectbox(
+        "Question type",
+        [
+            "Mixed",
+            "Conceptual",
+            "Definition",
+            "Short Answer",
+        ],
+    )
+
     st.divider()
-    st.caption("Output languages")
+
+    st.caption("🌍 Output languages")
+
     st.write("🇬🇧 English")
     st.write("🇮🇳 Hindi")
     st.write("🇮🇳 Marathi")
 
-st.subheader("① Upload your document")
-uploaded = st.file_uploader("Supported formats: PDF, DOCX, TXT", type=["pdf","docx","txt"])
+    st.divider()
 
-if uploaded:
-    suffix = Path(uploaded.name).suffix.lower()
-    temp_input = Path(tempfile.gettempdir()) / f"linguaq_input{suffix}"
-    temp_input.write_bytes(uploaded.getvalue())
+    st.caption("🔐 API key secured through Streamlit Secrets")
+
+
+# ============================================================
+# UPLOAD SECTION
+# ============================================================
+
+st.html(
+    """
+<div class="qf-section-title">
+    📄 Upload your document
+</div>
+
+<div class="qf-section-subtitle">
+    Upload a PDF, DOCX or TXT file and QnAForge will create
+    meaningful, context-aware questions and answers.
+</div>
+"""
+)
+
+st.html(
+    """
+<div class="qf-upload-card">
+    <strong>Supported formats:</strong>
+    PDF, DOCX, TXT
+</div>
+"""
+)
+
+uploaded_file = st.file_uploader(
+    "Upload",
+    type=["pdf", "docx", "txt"],
+    label_visibility="collapsed",
+)
+
+
+# ============================================================
+# DOCUMENT PROCESSING
+# ============================================================
+
+if uploaded_file is not None:
+
+    suffix = Path(uploaded_file.name).suffix.lower()
+
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=suffix,
+    ) as tmp:
+
+        tmp.write(uploaded_file.getbuffer())
+        temp_path = tmp.name
 
     try:
-        text = extract_text(str(temp_input))
+
+        text = extract_text(temp_path)
+
     except Exception as exc:
+
         st.error(f"Could not read the document: {exc}")
         st.stop()
 
+    finally:
+
+        try:
+            Path(temp_path).unlink()
+        except Exception:
+            pass
+
     if not text.strip():
-        st.error("No readable text was found in the document.")
+
+        st.warning(
+            "The uploaded document does not contain readable text."
+        )
         st.stop()
 
-    c1,c2,c3 = st.columns(3)
-    c1.metric("Document", uploaded.name)
-    c2.metric("Characters", f"{len(text):,}")
-    c3.metric("Estimated words", f"{len(text.split()):,}")
+    word_count = len(text.split())
+    character_count = len(text)
 
+    st.html(
+        f"""
+<div class="qf-config">
+    <strong>📄 {html.escape(uploaded_file.name)}</strong><br>
+    <span style="opacity:0.7;">
+        {word_count:,} words · {character_count:,} characters
+    </span>
+</div>
+"""
+    )
+
+    # Preview
     with st.expander("👀 Preview extracted text"):
-        st.text_area("Extracted text", text[:5000], height=180)
 
-    st.subheader("② Configure generation")
-    st.info(f"Up to **{qna_count} Q&A pairs** • Difficulty: **{difficulty}** • Type: **{question_type}**")
+        preview = text[:5000]
 
-    st.subheader("③ Generate multilingual Q&A")
-    if st.button("✨ Generate Q&A", type="primary", use_container_width=True):
-        if not api_key.strip():
-            st.error("Enter your Gemini API key in the sidebar.")
-            st.stop()
+        st.text_area(
+            "Extracted text",
+            preview,
+            height=220,
+            label_visibility="collapsed",
+        )
+
+    # Generation settings summary
+    st.html(
+        f"""
+<div class="qf-config">
+    <strong>Generation configuration</strong><br>
+    Model: {html.escape(model)}
+    &nbsp;·&nbsp;
+    Q&A pairs: {qna_count}
+    &nbsp;·&nbsp;
+    Difficulty: {html.escape(difficulty)}
+    &nbsp;·&nbsp;
+    Type: {html.escape(question_type)}
+    <br>
+    Languages: English · Hindi · Marathi
+</div>
+"""
+    )
+
+    # ========================================================
+    # GENERATE
+    # ========================================================
+
+    generate_clicked = st.button(
+        "✨ Generate Multilingual Q&A",
+        type="primary",
+        use_container_width=True,
+    )
+
+    if generate_clicked:
 
         progress = st.progress(0)
         status = st.empty()
 
         def update_progress(value, message):
-            progress.progress(max(0,min(100,value)))
-            status.write(message)
+
+            progress.progress(
+                max(0, min(100, int(value)))
+            )
+
+            status.info(message)
 
         try:
-            result = generate_qna_multilingual(
-                text=text, api_key=api_key.strip(), model=model,
-                qna_per_chunk=qna_count, max_chars=10000,
-                progress_callback=update_progress
-            )
-            final_data = {k: result.get(k,[])[:qna_count] for k in ["English","Hindi","Marathi"]}
-            if not final_data["English"]:
-                raise ValueError("No English Q&A was generated.")
-            if not final_data["Hindi"] or not final_data["Marathi"]:
-                raise ValueError(f"Multilingual generation incomplete: English={len(final_data['English'])}, Hindi={len(final_data['Hindi'])}, Marathi={len(final_data['Marathi'])}.")
 
-            output_path = Path(tempfile.gettempdir()) / "LinguaQ_QnA.xlsx"
-            create_qna_workbook(final_data, str(output_path))
-            st.session_state["result"] = final_data
-            st.session_state["excel"] = output_path.read_bytes()
+            result = generate_qna_multilingual(
+                text=text,
+                api_key=api_key,
+                model=model,
+                qna_per_chunk=qna_count,
+                max_chars=10000,
+                progress_callback=update_progress,
+            )
+
+            st.session_state["result"] = result
+
             progress.progress(100)
-            status.success("✓ Generated, translated, validated and exported.")
+            status.success(
+                "✓ Q&A generation completed successfully."
+            )
+
         except Exception as exc:
-            st.error(f"Generation failed: {exc}")
+
+            progress.empty()
+            status.empty()
+
+            st.error(
+                f"Generation failed: {exc}"
+            )
+
+
+# ============================================================
+# RESULTS
+# ============================================================
 
 if "result" in st.session_state:
+
     data = st.session_state["result"]
-    st.subheader("④ Review results")
-    a,b,c = st.columns(3)
-    a.metric("🇬🇧 English",len(data["English"]))
-    b.metric("🇮🇳 Hindi",len(data["Hindi"]))
-    c.metric("🇮🇳 Marathi",len(data["Marathi"]))
 
-    if len(data["English"]) == len(data["Hindi"]) == len(data["Marathi"]):
-        st.success("✓ All three language sets are aligned.")
+    st.divider()
 
-    tabs = st.tabs(["🇬🇧 English","🇮🇳 Hindi","🇮🇳 Marathi"])
-    for tab, lang in zip(tabs, ["English","Hindi","Marathi"]):
+    st.html(
+        """
+<div class="qf-section-title">
+    📚 Review your results
+</div>
+
+<div class="qf-section-subtitle">
+    Review the generated Q&A in each language before downloading.
+</div>
+"""
+    )
+
+    # --------------------------------------------------------
+    # LANGUAGE COUNTS
+    # --------------------------------------------------------
+
+    english_count = len(data.get("English", []))
+    hindi_count = len(data.get("Hindi", []))
+    marathi_count = len(data.get("Marathi", []))
+
+    a, b, c = st.columns(3)
+
+    a.metric(
+        "🇬🇧 English",
+        english_count,
+    )
+
+    b.metric(
+        "🇮🇳 Hindi",
+        hindi_count,
+    )
+
+    c.metric(
+        "🇮🇳 Marathi",
+        marathi_count,
+    )
+
+    if (
+        english_count
+        == hindi_count
+        == marathi_count
+    ):
+
+        st.success(
+            "✓ All three language sets are aligned."
+        )
+
+    # ========================================================
+    # LANGUAGE TABS
+    # ========================================================
+
+    tabs = st.tabs(
+        [
+            "🇬🇧 English",
+            "🇮🇳 Hindi",
+            "🇮🇳 Marathi",
+        ]
+    )
+
+    for tab, language in zip(
+        tabs,
+        [
+            "English",
+            "Hindi",
+            "Marathi",
+        ],
+    ):
+
         with tab:
-            for i,item in enumerate(data[lang],1):
-                st.markdown(f'<div class="q-card"><div class="q-label">QUESTION {i}</div><div class="q-text">{item["question"]}</div><div class="q-label">ANSWER</div><div class="a-text">{item["answer"]}</div></div>', unsafe_allow_html=True)
 
-    st.subheader("⑤ Download")
-    st.download_button("📥 Download Excel Workbook", data=st.session_state["excel"], file_name="LinguaQ_QnA.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            items = data.get(language, [])
 
-st.divider()
-st.caption("LinguaQ AI • Python • Gemini AI • Streamlit • OpenPyXL • English • Hindi • Marathi")
+            if not items:
+
+                st.info(
+                    f"No {language} Q&A was generated."
+                )
+                continue
+
+            for i, item in enumerate(
+                items,
+                1,
+            ):
+
+                question = html.escape(
+                    str(
+                        item.get(
+                            "question",
+                            "",
+                        )
+                    ).strip()
+                )
+
+                answer = html.escape(
+                    str(
+                        item.get(
+                            "answer",
+                            "",
+                        )
+                    ).strip()
+                )
+
+                st.html(
+                    f"""
+<div class="qf-qcard">
+    <div class="qf-number">{i}</div>
+
+    <div class="qf-label">
+        Question
+    </div>
+
+    <div class="qf-question">
+        {question}
+    </div>
+
+    <div class="qf-label">
+        Answer
+    </div>
+
+    <div class="qf-answer">
+        {answer}
+    </div>
+</div>
+"""
+                )
+
+    # ========================================================
+    # DOWNLOAD
+    # ========================================================
+
+    st.divider()
+
+    st.html(
+        """
+<div class="qf-section-title">
+    📥 Download your Q&A
+</div>
+
+<div class="qf-section-subtitle">
+    Download the complete multilingual workbook in Excel format.
+</div>
+"""
+    )
+
+    try:
+
+        output_path = Path("QnAForge_QnA.xlsx")
+
+        create_qna_workbook(
+            data,
+            str(output_path),
+        )
+
+        with open(
+            output_path,
+            "rb",
+        ) as file:
+
+            st.download_button(
+                label="📥 Download QnAForge_QnA.xlsx",
+                data=file,
+                file_name="QnAForge_QnA.xlsx",
+                mime=(
+                    "application/vnd.openxmlformats-"
+                    "officedocument.spreadsheetml.sheet"
+                ),
+                use_container_width=True,
+            )
+
+    except Exception as exc:
+
+        st.error(
+            f"Could not create Excel workbook: {exc}"
+        )
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.html(
+    """
+<div class="qf-footer">
+    🌐 <strong>QnAForge</strong>
+    · Multilingual AI Question-Answer Generation
+    <br>
+    English · Hindi · Marathi
+</div>
+"""
+)
